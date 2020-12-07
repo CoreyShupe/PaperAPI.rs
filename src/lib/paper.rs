@@ -39,12 +39,10 @@ pub struct ProjectRequest {
 }
 
 impl ProjectRequest {
-    pub fn new(project: &str) -> Self {
-        Self::new_strings(String::from(project))
-    }
-
-    pub fn new_strings(project: String) -> Self {
-        Self { project }
+    pub fn new<T>(project: T) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into() }
     }
 }
 
@@ -66,12 +64,10 @@ pub struct ProjectGroupInfoRequest {
 }
 
 impl ProjectGroupInfoRequest {
-    pub fn new(project: &str, version_group: &str) -> Self {
-        Self::new_strings(String::from(project), String::from(version_group))
-    }
-
-    pub fn new_strings(project: String, version_group: String) -> Self {
-        Self { project, version_group }
+    pub fn new<T>(project: T, version_group: T) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into(), version_group: version_group.into() }
     }
 }
 
@@ -93,12 +89,10 @@ pub struct ProjectGroupBuildsRequest {
 }
 
 impl ProjectGroupBuildsRequest {
-    pub fn new(project: &str, version_group: &str) -> Self {
-        Self::new_strings(String::from(project), String::from(version_group))
-    }
-
-    pub fn new_strings(project: String, version_group: String) -> Self {
-        Self { project, version_group }
+    pub fn new<T>(project: T, version_group: T) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into(), version_group: version_group.into() }
     }
 }
 
@@ -121,12 +115,10 @@ pub struct ProjectVersionInfoRequest {
 }
 
 impl ProjectVersionInfoRequest {
-    pub fn new(project: &str, version: &str) -> Self {
-        Self::new_strings(String::from(project), String::from(version))
-    }
-
-    pub fn new_strings(project: String, version: String) -> Self {
-        Self { project, version }
+    pub fn new<T>(project: T, version: T) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into(), version: version.into() }
     }
 }
 
@@ -149,12 +141,10 @@ pub struct ProjectVersionBuildsRequest {
 }
 
 impl ProjectVersionBuildsRequest {
-    pub fn new(project: &str, version: &str, build: i32) -> Self {
-        Self::new_strings(String::from(project), String::from(version), build)
-    }
-
-    pub fn new_strings(project: String, version: String, build: i32) -> Self {
-        Self { project, version, build }
+    pub fn new<T>(project: T, version: T, build: i32) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into(), version: version.into(), build }
     }
 }
 
