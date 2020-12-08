@@ -133,3 +133,30 @@ paper_struct! { ProjectVersionBuildsRequest
     build => i32 = i32,
     | "/v2/projects/{}/versions/{}/builds/{}", ProjectVersionBuildsResponse
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct BuildDownloadRequest {
+    project: String,
+    version: String,
+    build: i32,
+    download: String,
+}
+
+impl BuildDownloadRequest {
+    pub fn new<T>(project: T, version: T, build: i32, download: String) -> Self
+        where T: Into<String>
+    {
+        Self { project: project.into(), version: version.into(), build, download: download.into() }
+    }
+
+    pub fn build_request_url(&self) -> String {
+        format!("/v2/projects/{}/versions/{}/builds/{}/downloads/{}", self.project, self.version, self.build, self.download)
+    }
+
+    pub async fn call<ClientConfig, Function>(&self, function: Function) -> super::Result<()>
+        where ClientConfig: PaperClientConfig,
+              Function: Fn(Vec<u8>) + Sized
+    {
+        super::download_file::<ClientConfig, Function>(self.build_request_url(), function).await
+    }
+}

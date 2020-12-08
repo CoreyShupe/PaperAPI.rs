@@ -79,16 +79,16 @@ fn build_client() -> Client<HttpsConnector<HttpConnector>> {
     Client::builder().build::<_, hyper::Body>(https)
 }
 
-async fn get_reader<T>(path: String) -> Result<Reader<impl Buf>>
-    where T: PaperClientConfig
+async fn get_reader<ClientConfig>(path: String) -> Result<Reader<impl Buf>>
+    where ClientConfig: PaperClientConfig
 {
     let client = build_client();
     let uri = build_url(&path).parse()?;
-    if T::debug() {
+    if ClientConfig::debug() {
         println!("GETTING {}", uri);
     }
     let mut client_response: Response<Body> = client.get(uri).await?;
-    if T::debug() {
+    if ClientConfig::debug() {
         println!("Response: {}", client_response.status());
     }
 
@@ -103,6 +103,39 @@ async fn get_reader<T>(path: String) -> Result<Reader<impl Buf>>
     let buf = hyper::body::aggregate(client_response).await?;
     let bytes = buf.reader();
     Ok(bytes)
+}
+
+pub async fn download_file<ClientConfig, Function>(path: String, downloader: Function) -> Result<()>
+    where ClientConfig: PaperClientConfig,
+          Function: Fn(Vec<u8>)
+{
+    let client = build_client();
+    let uri = build_url(&path).parse()?;
+
+    if ClientConfig::debug() {
+        println!("GETTING {}", uri);
+    }
+    let mut client_response: Response<Body> = client.get(uri).await?;
+    if ClientConfig::debug() {
+        println!("Response: {}", client_response.status());
+    }
+
+    if client_response.status().ne(&StatusCode::from_u16(200)?) {
+        let mut error = String::from("");
+        while let Some(chunk) = client_response.body_mut().data().await {
+            error.push_str(&String::from_utf8_lossy(&chunk?));
+        }
+        return Err(Box::from(error));
+    }
+
+    while let Some(chunk) = client_response.body_mut().data().await {
+        let bytes = chunk?.to_vec();
+        if ClientConfig::debug() {
+            println!("Downloaded: {}bytes", bytes.len());
+        }
+        downloader(bytes);
+    }
+    Ok(())
 }
 
 pub async fn call_request<T, S>(request: &S) -> Result<S::Response>
