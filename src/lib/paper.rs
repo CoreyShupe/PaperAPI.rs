@@ -1,164 +1,135 @@
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChangesInfo {
-    pub commit: String,
-    pub summary: String,
-    pub message: String,
+use super::call_request;
+use super::{Result, PaperClientConfig};
+
+pub trait Request {
+    type Response;
+
+    fn build_request_url(&self) -> String;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ApplicationInfo {
-    pub name: String,
-    pub sha256: String,
+macro_rules! paper_struct {
+    ($i:ident $($value:ident => $t:ty),+ $(,)?) => (
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $i { $(pub $value: $t,)+ }
+    );
+    ($i:ident $($value:ident => $t:ty = $ext:ty),+ $(,)?) => (
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $i { $(pub $value: $t,)+ }
+    );
+    ($i:ident | $url:expr, $resp:ty) => (
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $i;
+        impl $i {
+            pub fn new() -> Self { Self {} }
+            pub async fn call<T>(&self) -> Result<$resp> where T: PaperClientConfig { call_request::<T, Self>(self).await }
+        }
+        impl Request for $i {
+            type Response = $resp;
+            fn build_request_url(&self) -> String {$url.into()}
+        }
+    );
+    ($i:ident $($value:ident => $t:ty),+$(,)? | $url:expr, $resp:ty) => (
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $i { $(pub $value: $t,)+ }
+
+        impl $i {
+            pub fn new<T>($($value: T),+ ) -> Self where T: Into<String> { Self { $($value: $value.into()),+ } }
+            pub async fn call<T>(&self) -> Result<$resp> where T: PaperClientConfig { call_request::<T, Self>(self).await }
+        }
+
+        impl Request for $i {
+            type Response = $resp;
+            fn build_request_url(&self) -> String { format!($url, $(self.$value),+) }
+        }
+    );
+    ($i:ident $($value:ident => $t:ty = $ext:ty),+$(,)? | $url:expr, $resp:ty) => (
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $i { $(pub $value: $t,)+ }
+
+        impl $i {
+            pub fn new<T>($($value: $ext),+ ) -> Self where T: Into<String> { Self { $($value: $value.into()),* } }
+            pub async fn call<T>(&self) -> Result<$resp> where T: PaperClientConfig { call_request::<T, Self>(self).await }
+        }
+
+        impl Request for $i {
+            type Response = $resp;
+            fn build_request_url(&self) -> String { format!($url, $(self.$value),+) }
+        }
+    );
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DownloadInfo {
-    pub application: ApplicationInfo,
+paper_struct!(ChangesInfo commit => String, summary => String, message => String);
+paper_struct!(ApplicationInfo name => String, sha256 => String);
+paper_struct!(DownloadInfo application => ApplicationInfo = ApplicationInfo);
+
+paper_struct! { BuildInfo
+    build => i32 = i32,
+    time => String = T,
+    version => String = T,
+    changes => Vec<ChangesInfo> = Vec<ChangesInfo>,
+    downloads => DownloadInfo = DownloadInfo,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BuildInfo {
-    pub build: i32,
-    pub time: String,
-    pub version: String,
-    pub changes: Vec<ChangesInfo>,
-    pub downloads: DownloadInfo,
+paper_struct!(ProjectsResponse projects => Vec<String> = Vec<String>);
+
+paper_struct!(ProjectsRequest | "/v2/projects", ProjectsResponse);
+
+paper_struct! { ProjectResponse
+    project_id => String = T,
+    project_name => String = T,
+    version_groups => Vec<String> = Vec<String>,
+    versions => Vec<String> = Vec<String>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectsResponse {
-    pub projects: Vec<String>,
+paper_struct!(ProjectRequest project => String | "/v2/projects/{}", ProjectResponse);
+
+paper_struct! { ProjectGroupInfoResponse
+    project_id => String = T,
+    project_name => String = T,
+    version_group => String = T,
+    versions => Vec<String> = Vec<String>,
 }
 
-pub const PROJECTS_REQUEST_URL: &str = "/v2/projects";
+paper_struct!(ProjectGroupInfoRequest project => String, version_group => String | "/v2/projects/{}/version_group/{}", ProjectGroupInfoResponse);
 
-pub struct ProjectRequest {
-    project: String,
+paper_struct! { ProjectGroupBuildsResponse
+    project_id => String = T,
+    project_name => String = T,
+    version_group => String = T,
+    version => Vec<String> = Vec<String>,
+    builds => Vec<BuildInfo> = Vec<BuildInfo>,
 }
 
-impl ProjectRequest {
-    pub fn new<T>(project: T) -> Self
-        where T: Into<String>
-    {
-        Self { project: project.into() }
-    }
+paper_struct! { ProjectGroupBuildsRequest
+    project => String,
+    version_group => String,
+    | "/v2/projects/{}/version_group/{}/builds", ProjectGroupBuildsResponse
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectResponse {
-    pub project_id: String,
-    pub project_name: String,
-    pub version_groups: Vec<String>,
-    pub versions: Vec<String>,
+paper_struct! { ProjectVersionInfoResponse
+    project_id => String = T,
+    project_name => String = T,
+    version => String = T,
+    builds => Vec<i32> = Vec<i32>,
 }
 
-pub fn project_request_url(request: ProjectRequest) -> String {
-    format!("/v2/projects/{}", request.project)
+paper_struct!(ProjectVersionInfoRequest project => String, version => String | "/v2/projects/{}/versions/{}", ProjectVersionInfoResponse);
+
+paper_struct! { ProjectVersionBuildsResponse
+    project_id => String = T,
+    project_name => String = T,
+    version => String = T,
+    build => i32 = i32,
+    time => String = T,
+    changes => Vec<ChangesInfo> = Vec<ChangesInfo>,
+    downloads => DownloadInfo = DownloadInfo,
 }
 
-pub struct ProjectGroupInfoRequest {
-    project: String,
-    version_group: String,
-}
-
-impl ProjectGroupInfoRequest {
-    pub fn new<T>(project: T, version_group: T) -> Self
-        where T: Into<String>
-    {
-        Self { project: project.into(), version_group: version_group.into() }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectGroupInfoResponse {
-    pub project_id: String,
-    pub project_name: String,
-    pub version_group: String,
-    pub versions: Vec<String>,
-}
-
-pub fn project_group_info_request_url(request: ProjectGroupInfoRequest) -> String {
-    format!("/v2/projects/{}/version_group/{}", request.project, request.version_group)
-}
-
-pub struct ProjectGroupBuildsRequest {
-    project: String,
-    version_group: String,
-}
-
-impl ProjectGroupBuildsRequest {
-    pub fn new<T>(project: T, version_group: T) -> Self
-        where T: Into<String>
-    {
-        Self { project: project.into(), version_group: version_group.into() }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectGroupBuildsResponse {
-    pub project_id: String,
-    pub project_name: String,
-    pub version_group: String,
-    pub versions: Vec<String>,
-    pub builds: Vec<BuildInfo>,
-}
-
-pub fn project_group_builds_request_url(request: ProjectGroupBuildsRequest) -> String {
-    format!("/v2/projects/{}/version_group/{}/builds", request.project, request.version_group)
-}
-
-pub struct ProjectVersionInfoRequest {
-    project: String,
-    version: String,
-}
-
-impl ProjectVersionInfoRequest {
-    pub fn new<T>(project: T, version: T) -> Self
-        where T: Into<String>
-    {
-        Self { project: project.into(), version: version.into() }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectVersionInfoResponse {
-    pub project_id: String,
-    pub project_name: String,
-    pub version: String,
-    pub builds: Vec<i32>,
-}
-
-pub fn project_version_info_request_url(request: ProjectVersionInfoRequest) -> String {
-    format!("/v2/projects/{}/versions/{}", request.project, request.version)
-}
-
-pub struct ProjectVersionBuildsRequest {
-    project: String,
-    version: String,
-    build: i32,
-}
-
-impl ProjectVersionBuildsRequest {
-    pub fn new<T>(project: T, version: T, build: i32) -> Self
-        where T: Into<String>
-    {
-        Self { project: project.into(), version: version.into(), build }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectVersionBuildsResponse {
-    pub project_id: String,
-    pub project_name: String,
-    pub version: String,
-    pub build: i32,
-    pub time: String,
-    pub changes: Vec<ChangesInfo>,
-    pub downloads: DownloadInfo,
-}
-
-pub fn project_version_builds_request_url(request: ProjectVersionBuildsRequest) -> String {
-    format!("/v2/projects/{}/versions/{}/builds/{}", request.project, request.version, request.build)
+paper_struct! { ProjectVersionBuildsRequest
+    project => String = T,
+    version => String = T,
+    build => i32 = i32,
+    | "/v2/projects/{}/versions/{}/builds/{}", ProjectVersionBuildsResponse
 }

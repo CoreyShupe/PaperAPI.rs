@@ -24,37 +24,27 @@ pub trait PaperClientConfig {
     fn debug() -> bool;
 
     async fn get_projects() -> Result<ProjectsResponse> {
-        get_projects::<Self::ConfigType>().await
+        ProjectsRequest::new().call::<Self::ConfigType>().await
     }
 
-    async fn get_project<T>(project: T) -> Result<ProjectResponse>
-        where T: Into<String> + Send
-    {
-        get_project::<Self::ConfigType>(ProjectRequest::new(project)).await
+    async fn get_project<T>(project: T) -> Result<ProjectResponse> where T: Into<String> + Send {
+        ProjectRequest::new(project).call::<Self::ConfigType>().await
     }
 
-    async fn get_group_info<T>(project: T, group: T) -> Result<ProjectGroupInfoResponse>
-        where T: Into<String> + Send
-    {
-        get_group_info::<Self::ConfigType>(ProjectGroupInfoRequest::new(project, group)).await
+    async fn get_group_info<T>(project: T, group: T) -> Result<ProjectGroupInfoResponse> where T: Into<String> + Send {
+        ProjectGroupInfoRequest::new(project, group).call::<Self::ConfigType>().await
     }
 
-    async fn get_group_builds<T>(project: T, group: T) -> Result<ProjectGroupBuildsResponse>
-        where T: Into<String> + Send
-    {
-        get_group_builds::<Self::ConfigType>(ProjectGroupBuildsRequest::new(project, group)).await
+    async fn get_group_builds<T>(project: T, group: T) -> Result<ProjectGroupBuildsResponse> where T: Into<String> + Send {
+        ProjectGroupBuildsRequest::new(project, group).call::<Self::ConfigType>().await
     }
 
-    async fn get_version_info<T>(project: T, version: T) -> Result<ProjectVersionInfoResponse>
-        where T: Into<String> + Send
-    {
-        get_version_info::<Self::ConfigType>(ProjectVersionInfoRequest::new(project, version)).await
+    async fn get_version_info<T>(project: T, version: T) -> Result<ProjectVersionInfoResponse> where T: Into<String> + Send {
+        ProjectVersionInfoRequest::new(project, version).call::<Self::ConfigType>().await
     }
 
-    async fn get_version_builds<T>(project: T, version: T, build: i32) -> Result<ProjectVersionBuildsResponse>
-        where T: Into<String> + Send
-    {
-        get_version_builds::<Self::ConfigType>(ProjectVersionBuildsRequest::new(project, version, build)).await
+    async fn get_version_builds<T>(project: T, version: T, build: i32) -> Result<ProjectVersionBuildsResponse> where T: Into<String> + Send {
+        ProjectVersionBuildsRequest::new(project, version, build).call::<Self::ConfigType>().await
     }
 }
 
@@ -115,55 +105,16 @@ async fn get_reader<T>(path: String) -> Result<Reader<impl Buf>>
     Ok(bytes)
 }
 
-fn parse_json<'a, T>(buffer: Reader<impl Buf>) -> T
-    where T: DeserializeOwned
-{
-    serde_json::from_reader(buffer).expect("Failed to parse json")
-}
-
-async fn get_json<T, K, V>(url: K) -> Result<V>
+pub async fn call_request<T, S>(request: &S) -> Result<S::Response>
     where
         T: PaperClientConfig,
-        K: Into<String>,
-        V: DeserializeOwned
+        S: Request + Send + Sync,
+        S::Response: DeserializeOwned,
 {
-    get_reader::<T>(url.into()).await.map(|reader| parse_json(reader))
-}
+    let reader = get_reader::<T>(request.build_request_url()).await?;
+    let value = serde_json::from_reader(reader)?;
 
-pub async fn get_projects<T>() -> Result<ProjectsResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(PROJECTS_REQUEST_URL).await
-}
-
-pub async fn get_project<T>(request: ProjectRequest) -> Result<ProjectResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(project_request_url(request)).await
-}
-
-pub async fn get_group_info<T>(request: ProjectGroupInfoRequest) -> Result<ProjectGroupInfoResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(project_group_info_request_url(request)).await
-}
-
-pub async fn get_group_builds<T>(request: ProjectGroupBuildsRequest) -> Result<ProjectGroupBuildsResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(project_group_builds_request_url(request)).await
-}
-
-pub async fn get_version_info<T>(request: ProjectVersionInfoRequest) -> Result<ProjectVersionInfoResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(project_version_info_request_url(request)).await
-}
-
-pub async fn get_version_builds<T>(request: ProjectVersionBuildsRequest) -> Result<ProjectVersionBuildsResponse>
-    where T: PaperClientConfig
-{
-    get_json::<T, _, _>(project_version_builds_request_url(request)).await
+    Ok(value)
 }
 
 #[cfg(test)]
