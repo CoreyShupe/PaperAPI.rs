@@ -15,7 +15,7 @@ use serde::de::DeserializeOwned;
 
 const BASE_URL: &str = "https://papermc.io/api";
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[async_trait]
 pub trait PaperClientConfig {
@@ -105,9 +105,9 @@ async fn get_reader<ClientConfig>(path: String) -> Result<Reader<impl Buf>>
     Ok(bytes)
 }
 
-pub async fn download_file<ClientConfig, Function>(path: String, downloader: Function) -> Result<()>
+pub async fn download_file<ClientConfig, Function>(path: String, mut downloader: Function) -> Result<()>
     where ClientConfig: PaperClientConfig,
-          Function: Fn(Vec<u8>)
+          Function: FnMut(&[u8])
 {
     let client = build_client();
     let uri = build_url(&path).parse()?;
@@ -128,13 +128,20 @@ pub async fn download_file<ClientConfig, Function>(path: String, downloader: Fun
         return Err(Box::from(error));
     }
 
+    let mut total = 0;
+
+    let size_hint = client_response.size_hint();
+    let size = size_hint.upper().unwrap_or(size_hint.lower());
+
     while let Some(chunk) = client_response.body_mut().data().await {
-        let bytes = chunk?.to_vec();
+        let bytes = chunk?;
         if ClientConfig::debug() {
-            println!("Downloaded: {}bytes", bytes.len());
+            total = total + bytes.len();
+            print!("\rDownloaded: ({}/{}){}%", total, size, (total as u64 * 100u64) / size);
         }
-        downloader(bytes);
+        downloader(&bytes);
     }
+    println!();
     Ok(())
 }
 

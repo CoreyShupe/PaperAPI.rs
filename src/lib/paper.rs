@@ -98,7 +98,7 @@ paper_struct! { ProjectGroupBuildsResponse
     project_id => String = T,
     project_name => String = T,
     version_group => String = T,
-    version => Vec<String> = Vec<String>,
+    versions => Vec<String> = Vec<String>,
     builds => Vec<BuildInfo> = Vec<BuildInfo>,
 }
 
@@ -143,7 +143,7 @@ pub struct BuildDownloadRequest {
 }
 
 impl BuildDownloadRequest {
-    pub fn new<T>(project: T, version: T, build: i32, download: String) -> Self
+    pub fn new<T>(project: T, version: T, build: i32, download: T) -> Self
         where T: Into<String>
     {
         Self { project: project.into(), version: version.into(), build, download: download.into() }
@@ -153,10 +153,10 @@ impl BuildDownloadRequest {
         format!("/v2/projects/{}/versions/{}/builds/{}/downloads/{}", self.project, self.version, self.build, self.download)
     }
 
-    pub async fn call<ClientConfig, Function>(&self, function: Function) -> super::Result<()>
+    pub async fn call<ClientConfig, Function>(&self, downloader: Function) -> super::Result<()>
         where ClientConfig: PaperClientConfig,
-              Function: Fn(Vec<u8>) + Sized
+              Function: FnMut(&[u8]) + Sized
     {
-        super::download_file::<ClientConfig, Function>(self.build_request_url(), function).await
+        super::download_file::<ClientConfig, Function>(self.build_request_url(), downloader).await
     }
 }
