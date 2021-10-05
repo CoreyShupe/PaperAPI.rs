@@ -13,7 +13,7 @@ use bytes::Buf;
 use bytes::buf::ext::Reader;
 use serde::de::DeserializeOwned;
 
-const BASE_URL: &str = "https://papermc.io/api";
+pub const BASE_URL: &str = "https://papermc.io/api";
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
